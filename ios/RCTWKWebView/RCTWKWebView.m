@@ -24,6 +24,12 @@
 
 @end
 
+@implementation _NoInputAccessoryView
+- (id)inputAccessoryView {
+    return nil;
+}
+@end
+
 @implementation RCTWKWebView
 {
   WKWebView *_webView;
