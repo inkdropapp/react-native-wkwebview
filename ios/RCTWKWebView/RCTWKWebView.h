@@ -18,6 +18,9 @@ shouldStartLoadForRequest:(NSMutableDictionary<NSString *, id> *)request
 
 @end
 
+@interface _NoInputAccessoryView : NSObject
+@end
+
 @interface RCTWKWebView : RCTView
 
 @property (nonatomic, weak) id<RCTWKWebViewDelegate> delegate;

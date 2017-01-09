@@ -11,6 +11,8 @@
 #import "RCTView.h"
 #import "UIView+React.h"
 
+#import <objc/runtime.h>
+
 @interface RCTWKWebView () <WKNavigationDelegate, RCTAutoInsetsProtocol, WKScriptMessageHandler, WKUIDelegate>
 
 @property (nonatomic, copy) RCTDirectEventBlock onLoadingStart;
@@ -44,7 +46,10 @@
     _webView = [[WKWebView alloc] initWithFrame:self.bounds configuration:config];
     _webView.UIDelegate = self;
     _webView.navigationDelegate = self;
+    _webView.scrollView.layer.masksToBounds = NO;
+    _webView.scrollView.scrollEnabled = NO;
     [_webView addObserver:self forKeyPath:@"estimatedProgress" options:NSKeyValueObservingOptionNew context:nil];
+    [self removeInputAccessoryViewFromWKWebView:_webView];
     [self addSubview:_webView];
   }
   return self;
@@ -344,6 +349,38 @@ RCT_NOT_IMPLEMENTED(- (instancetype)initWithCoder:(NSCoder *)aDecoder)
     }
   }
   return nil;
+}
+
+- (void)removeInputAccessoryViewFromWKWebView:(WKWebView *)webView {
+  UIView *targetView;
+
+  for (UIView *view in webView.scrollView.subviews) {
+    if([[view.class description] hasPrefix:@"WKContent"]) {
+      targetView = view;
+    }
+  }
+
+  if (!targetView) {
+    return;
+  }
+
+  NSString *noInputAccessoryViewClassName = [NSString stringWithFormat:@"%@_NoInputAccessoryView", targetView.class.superclass];
+  Class newClass = NSClassFromString(noInputAccessoryViewClassName);
+
+  if(newClass == nil) {
+    newClass = objc_allocateClassPair(targetView.class, [noInputAccessoryViewClassName cStringUsingEncoding:NSASCIIStringEncoding], 0);
+    if(!newClass) {
+      return;
+    }
+
+    Method method = class_getInstanceMethod([_NoInputAccessoryView class], @selector(inputAccessoryView));
+
+    class_addMethod(newClass, @selector(inputAccessoryView), method_getImplementation(method), method_getTypeEncoding(method));
+
+    objc_registerClassPair(newClass);
+  }
+
+  object_setClass(targetView, newClass);
 }
 
 @end
