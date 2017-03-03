@@ -128,8 +128,9 @@ RCT_NOT_IMPLEMENTED(- (instancetype)initWithCoder:(NSCoder *)aDecoder)
     NSString *allowingReadAccessToURL = [RCTConvert NSString:source[@"allowingReadAccessToURL"]];
     
     if (file && [_webView respondsToSelector:@selector(loadFileURL:allowingReadAccessToURL:)]) {
-      NSURL *fileURL = [RCTConvert NSURL:file];
-      NSURL *baseURL = [RCTConvert NSURL:allowingReadAccessToURL];
+      NSString* bundlePath = [NSBundle mainBundle].bundlePath;
+      NSURL *fileURL = [RCTConvert NSURL:[bundlePath stringByAppendingString:file]];
+      NSURL *baseURL = [RCTConvert NSURL:[bundlePath stringByAppendingString:allowingReadAccessToURL]];
       [_webView loadFileURL:fileURL allowingReadAccessToURL:baseURL];
       return;
     }
