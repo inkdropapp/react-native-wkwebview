@@ -58,7 +58,7 @@
   ],
   "license": "MIT",
   "main": "index.js",
-  "name": "react-native-wkwebview-reborn",
+  "name": "@craftzdog/react-native-wkwebview-reborn",
   "optionalDependencies": {},
   "peerDependencies": {
     "prop-types": "^15.6.0"
