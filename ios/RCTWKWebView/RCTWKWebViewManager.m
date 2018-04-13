@@ -29,23 +29,14 @@ RCT_ENUM_CONVERTER(UIScrollViewContentInsetAdjustmentBehavior, (@{
 @implementation RCTWKWebViewManager
 {
   NSConditionLock *_shouldStartLoadLock;
-  WKProcessPool *_processPool;
   BOOL _shouldStartLoad;
 }
 
 RCT_EXPORT_MODULE()
 
-- (id)init {
-  if (self = [super init]) {
-    _processPool = [[WKProcessPool alloc] init];
-  }
-    
-  return self;
-}
-
 - (UIView *)view
 {
-  RCTWKWebView *webView = [[RCTWKWebView alloc] initWithProcessPool:_processPool];
+  RCTWKWebView *webView = [[RCTWKWebView alloc] initWithProcessPool:[[WKProcessPool alloc] init]];
   webView.delegate = self;
   return webView;
 }
