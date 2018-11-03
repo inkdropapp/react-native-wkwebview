@@ -2,7 +2,7 @@
 
 #import <React/RCTView.h>
 
-@class RCTWKWebView;
+@class CRAWKWebView;
 
 /**
  * Special scheme used to pass messages to the injectedJavaScript
@@ -12,22 +12,19 @@
  */
 extern NSString *const RCTJSNavigationScheme;
 
-@protocol RCTWKWebViewDelegate <NSObject>
+@protocol CRAWKWebViewDelegate <NSObject>
 
-- (BOOL)webView:(RCTWKWebView *)webView
+- (BOOL)webView:(CRAWKWebView *)webView
 shouldStartLoadForRequest:(NSMutableDictionary<NSString *, id> *)request
    withCallback:(RCTDirectEventBlock)callback;
 
 @end
 
-@interface _NoInputAccessoryView : NSObject
-@end
-
-@interface RCTWKWebView : RCTView
+@interface CRAWKWebView : RCTView
 
 - (instancetype)initWithProcessPool:(WKProcessPool *)processPool;
 
-@property (nonatomic, weak) id<RCTWKWebViewDelegate> delegate;
+@property (nonatomic, weak) id<CRAWKWebViewDelegate> delegate;
 
 @property (nonatomic, copy) NSDictionary *source;
 @property (nonatomic, assign) UIEdgeInsets contentInset;
@@ -35,8 +32,12 @@ shouldStartLoadForRequest:(NSMutableDictionary<NSString *, id> *)request
 @property (nonatomic, assign) BOOL messagingEnabled;
 @property (nonatomic, assign) BOOL allowsLinkPreview;
 @property (nonatomic, assign) BOOL openNewWindowInWebView;
+@property (nonatomic, assign) BOOL injectJavaScriptForMainFrameOnly;
+@property (nonatomic, assign) BOOL injectedJavaScriptForMainFrameOnly;
+@property (nonatomic, copy) NSString *injectJavaScript;
 @property (nonatomic, copy) NSString *injectedJavaScript;
 @property (nonatomic, assign) BOOL hideKeyboardAccessoryView;
+@property (nonatomic, assign) BOOL keyboardDisplayRequiresUserAction;
 
 
 - (void)goForward;

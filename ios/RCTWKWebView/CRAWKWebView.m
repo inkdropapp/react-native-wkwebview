@@ -1,4 +1,4 @@
-#import "RCTWKWebView.h"
+#import "CRAWKWebView.h"
 
 #import "WeakScriptMessageDelegate.h"
 
@@ -24,7 +24,7 @@
 }
 @end
 
-@interface RCTWKWebView () <WKNavigationDelegate, RCTAutoInsetsProtocol, WKScriptMessageHandler, WKUIDelegate, UIScrollViewDelegate>
+@interface CRAWKWebView () <WKNavigationDelegate, RCTAutoInsetsProtocol, WKScriptMessageHandler, WKUIDelegate, UIScrollViewDelegate>
 
 @property (nonatomic, copy) RCTDirectEventBlock onLoadingStart;
 @property (nonatomic, copy) RCTDirectEventBlock onLoadingFinish;
@@ -33,13 +33,19 @@
 @property (nonatomic, copy) RCTDirectEventBlock onProgress;
 @property (nonatomic, copy) RCTDirectEventBlock onMessage;
 @property (nonatomic, copy) RCTDirectEventBlock onScroll;
+@property (nonatomic, copy) RCTDirectEventBlock onNavigationResponse;
 @property (assign) BOOL sendCookies;
+@property (nonatomic, strong) WKUserScript *atStartScript;
+@property (nonatomic, strong) WKUserScript *atEndScript;
 
 @end
 
-@implementation RCTWKWebView
+@implementation CRAWKWebView
 {
   WKWebView *_webView;
+  BOOL _injectJavaScriptForMainFrameOnly;
+  BOOL _injectedJavaScriptForMainFrameOnly;
+  NSString *_injectJavaScript;
   NSString *_injectedJavaScript;
 }
 
@@ -55,7 +61,6 @@ RCT_NOT_IMPLEMENTED(- (instancetype)initWithCoder:(NSCoder *)aDecoder)
   if(self = [self initWithFrame:CGRectZero])
   {
     super.backgroundColor = [UIColor clearColor];
-    
     _automaticallyAdjustContentInsets = YES;
     _contentInset = UIEdgeInsetsZero;
     
@@ -79,11 +84,73 @@ RCT_NOT_IMPLEMENTED(- (instancetype)initWithCoder:(NSCoder *)aDecoder)
       _webView.scrollView.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
     }
 #endif
-    
+    [self setupPostMessageScript];
     [_webView addObserver:self forKeyPath:@"estimatedProgress" options:NSKeyValueObservingOptionNew context:nil];
     [self addSubview:_webView];
   }
   return self;
+}
+
+- (void)setInjectJavaScript:(NSString *)injectJavaScript {
+  _injectJavaScript = injectJavaScript;
+  self.atStartScript = [[WKUserScript alloc] initWithSource:injectJavaScript
+                                              injectionTime:WKUserScriptInjectionTimeAtDocumentStart
+                                           forMainFrameOnly:_injectJavaScriptForMainFrameOnly];
+  [self resetupScripts];
+}
+
+- (void)setInjectedJavaScript:(NSString *)script {
+  _injectedJavaScript = script;
+  self.atEndScript = [[WKUserScript alloc] initWithSource:script
+                                            injectionTime:WKUserScriptInjectionTimeAtDocumentEnd
+                                         forMainFrameOnly:_injectedJavaScriptForMainFrameOnly];
+  [self resetupScripts];
+}
+
+- (void)setInjectedJavaScriptForMainFrameOnly:(BOOL)injectedJavaScriptForMainFrameOnly {
+  _injectedJavaScriptForMainFrameOnly = injectedJavaScriptForMainFrameOnly;
+  if (_injectedJavaScript != nil) {
+    [self setInjectedJavaScript:_injectedJavaScript];
+  }
+}
+
+- (void)setInjectJavaScriptForMainFrameOnly:(BOOL)injectJavaScriptForMainFrameOnly {
+  _injectJavaScriptForMainFrameOnly = injectJavaScriptForMainFrameOnly;
+  if (_injectJavaScript != nil) {
+    [self setInjectJavaScript:_injectJavaScript];
+  }
+}
+
+- (void)setMessagingEnabled:(BOOL)messagingEnabled {
+  _messagingEnabled = messagingEnabled;
+  [self setupPostMessageScript];
+}
+
+- (void)resetupScripts {
+  [_webView.configuration.userContentController removeAllUserScripts];
+  [self setupPostMessageScript];
+  if (self.atStartScript) {
+    [_webView.configuration.userContentController addUserScript:self.atStartScript];
+  }
+  if (self.atEndScript) {
+    [_webView.configuration.userContentController addUserScript:self.atEndScript];
+  }
+}
+
+- (void)setupPostMessageScript {
+  if (_messagingEnabled) {
+    NSString *source = @"window.originalPostMessage = window.postMessage;"
+    "window.postMessage = function(message, targetOrigin, transfer) {"
+      "window.webkit.messageHandlers.reactNative.postMessage(message);"
+      "if (typeof targetOrigin !== 'undefined') {"
+        "window.originalPostMessage(message, targetOrigin, transfer);"
+      "}"
+    "};";
+    WKUserScript *script = [[WKUserScript alloc] initWithSource:source
+                                                  injectionTime:WKUserScriptInjectionTimeAtDocumentStart
+                                               forMainFrameOnly:_injectedJavaScriptForMainFrameOnly];
+    [_webView.configuration.userContentController addUserScript:script];
+  }
 }
 
 - (void)loadRequest:(NSURLRequest *)request
@@ -136,6 +203,34 @@ RCT_NOT_IMPLEMENTED(- (instancetype)initWithCoder:(NSCoder *)aDecoder)
   }
   
   object_setClass(subview, newClass);
+}
+
+// https://github.com/Telerik-Verified-Plugins/WKWebView/commit/04e8296adeb61f289f9c698045c19b62d080c7e3
+// https://stackoverflow.com/a/48623286/3297914
+-(void)setKeyboardDisplayRequiresUserAction:(BOOL)keyboardDisplayRequiresUserAction
+{
+  if (!keyboardDisplayRequiresUserAction) {
+    Class class = NSClassFromString(@"WKContentView");
+    NSOperatingSystemVersion iOS_11_3_0 = (NSOperatingSystemVersion){11, 3, 0};
+    
+    if ([[NSProcessInfo processInfo] isOperatingSystemAtLeastVersion: iOS_11_3_0]) {
+      SEL selector = sel_getUid("_startAssistingNode:userIsInteracting:blurPreviousNode:changingActivityState:userObject:");
+      Method method = class_getInstanceMethod(class, selector);
+      IMP original = method_getImplementation(method);
+      IMP override = imp_implementationWithBlock(^void(id me, void* arg0, BOOL arg1, BOOL arg2, BOOL arg3, id arg4) {
+        ((void (*)(id, SEL, void*, BOOL, BOOL, BOOL, id))original)(me, selector, arg0, TRUE, arg2, arg3, arg4);
+      });
+      method_setImplementation(method, override);
+    } else {
+      SEL selector = sel_getUid("_startAssistingNode:userIsInteracting:blurPreviousNode:userObject:");
+      Method method = class_getInstanceMethod(class, selector);
+      IMP original = method_getImplementation(method);
+      IMP override = imp_implementationWithBlock(^void(id me, void* arg0, BOOL arg1, BOOL arg2, id arg3) {
+        ((void (*)(id, SEL, void*, BOOL, BOOL, id))original)(me, selector, arg0, TRUE, arg2, arg3);
+      });
+      method_setImplementation(method, override);
+    }
+  }
 }
 
 #if defined(__IPHONE_OS_VERSION_MAX_ALLOWED) && __IPHONE_OS_VERSION_MAX_ALLOWED >= 110000 /* __IPHONE_11_0 */
@@ -336,30 +431,37 @@ RCT_NOT_IMPLEMENTED(- (instancetype)initWithCoder:(NSCoder *)aDecoder)
     return;
   }
   NSDictionary *event = @{
-                        @"contentOffset": @{
-                            @"x": @(scrollView.contentOffset.x),
-                            @"y": @(scrollView.contentOffset.y)
-                            },
-                        @"contentInset": @{
-                            @"top": @(scrollView.contentInset.top),
-                            @"left": @(scrollView.contentInset.left),
-                            @"bottom": @(scrollView.contentInset.bottom),
-                            @"right": @(scrollView.contentInset.right)
-                            },
-                        @"contentSize": @{
-                            @"width": @(scrollView.contentSize.width),
-                            @"height": @(scrollView.contentSize.height)
-                            },
-                        @"layoutMeasurement": @{
-                            @"width": @(scrollView.frame.size.width),
-                            @"height": @(scrollView.frame.size.height)
-                            },
-                        @"zoomScale": @(scrollView.zoomScale ?: 1),
-                        };
+                          @"contentOffset": @{
+                              @"x": @(scrollView.contentOffset.x),
+                              @"y": @(scrollView.contentOffset.y)
+                              },
+                          @"contentInset": @{
+                              @"top": @(scrollView.contentInset.top),
+                              @"left": @(scrollView.contentInset.left),
+                              @"bottom": @(scrollView.contentInset.bottom),
+                              @"right": @(scrollView.contentInset.right)
+                              },
+                          @"contentSize": @{
+                              @"width": @(scrollView.contentSize.width),
+                              @"height": @(scrollView.contentSize.height)
+                              },
+                          @"layoutMeasurement": @{
+                              @"width": @(scrollView.frame.size.width),
+                              @"height": @(scrollView.frame.size.height)
+                              },
+                          @"zoomScale": @(scrollView.zoomScale ?: 1),
+                          };
   _onScroll(event);
 }
 
 #pragma mark - WKNavigationDelegate methods
+
+#if DEBUG
+- (void)webView:(WKWebView *)webView didReceiveAuthenticationChallenge:(NSURLAuthenticationChallenge *)challenge completionHandler:(void (^)(NSURLSessionAuthChallengeDisposition, NSURLCredential * _Nullable))completionHandler {
+  NSURLCredential * credential = [[NSURLCredential alloc] initWithTrust:[challenge protectionSpace].serverTrust];
+  completionHandler(NSURLSessionAuthChallengeUseCredential, credential);
+}
+#endif
 
 - (void)webView:(__unused WKWebView *)webView decidePolicyForNavigationAction:(WKNavigationAction *)navigationAction decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler
 {
@@ -437,29 +539,8 @@ RCT_NOT_IMPLEMENTED(- (instancetype)initWithCoder:(NSCoder *)aDecoder)
 
 - (void)webView:(WKWebView *)webView didFinishNavigation:(__unused WKNavigation *)navigation
 {
-  if (_messagingEnabled) {
-#if RCT_DEV
-    // See isNative in lodash
-    NSString *testPostMessageNative = @"String(window.postMessage) === String(Object.hasOwnProperty).replace('hasOwnProperty', 'postMessage')";
-    
-    [webView evaluateJavaScript:testPostMessageNative completionHandler:^(id result, NSError *error) {
-      if (!result) {
-        RCTLogWarn(@"Setting onMessage on a WebView overrides existing values of window.postMessage, but a previous value was defined");
-      }
-    }];
-#endif
-    NSString *source = @"window.originalPostMessage = window.postMessage; window.postMessage = function (data) { window.webkit.messageHandlers.reactNative.postMessage(data); }";
-    [webView evaluateJavaScript:source completionHandler:nil];
-  }
-  if (_injectedJavaScript != nil) {
-    [webView evaluateJavaScript:_injectedJavaScript completionHandler:^(id result, NSError *error) {
-      NSMutableDictionary<NSString *, id> *event = [self baseEvent];
-      event[@"jsEvaluationValue"] = [NSString stringWithFormat:@"%@", result];
-      _onLoadingFinish(event);
-    }];
-  }
   // we only need the final 'finishLoad' call so only fire the event when we're actually done loading.
-  else if (_onLoadingFinish && !webView.loading && ![webView.URL.absoluteString isEqualToString:@"about:blank"]) {
+  if (_onLoadingFinish && !webView.loading && ![webView.URL.absoluteString isEqualToString:@"about:blank"]) {
     _onLoadingFinish([self baseEvent]);
   }
 }
@@ -527,6 +608,27 @@ RCT_NOT_IMPLEMENTED(- (instancetype)initWithCoder:(NSCoder *)aDecoder)
 - (void)webViewWebContentProcessDidTerminate:(WKWebView *)webView
 {
   RCTLogWarn(@"Webview Process Terminated");
+}
+
+- (void)webView:(WKWebView *)webView decidePolicyForNavigationResponse:(WKNavigationResponse *)navigationResponse decisionHandler:(void (^)(WKNavigationResponsePolicy))decisionHandler {
+  if (_onNavigationResponse) {
+    NSDictionary *headers = @{};
+    NSInteger statusCode = 200;
+    if([navigationResponse.response isKindOfClass:[NSHTTPURLResponse class]]){
+        headers = ((NSHTTPURLResponse *)navigationResponse.response).allHeaderFields;
+        statusCode = ((NSHTTPURLResponse *)navigationResponse.response).statusCode;
+    }
+
+    NSMutableDictionary<NSString *, id> *event = [self baseEvent];
+    [event addEntriesFromDictionary:@{
+                                      @"headers": headers,
+                                      @"status": [NSHTTPURLResponse localizedStringForStatusCode:statusCode],
+                                      @"statusCode": @(statusCode),
+                                      }];
+    _onNavigationResponse(event);
+  }
+
+  decisionHandler(WKNavigationResponsePolicyAllow);
 }
 
 @end
