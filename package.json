@@ -40,7 +40,7 @@
     "email": "ruoysun@gmail.com"
   },
   "bugs": {
-    "url": "https://github.com/CRAlpha/react-native-wkwebview/issues"
+    "url": "https://github.com/inkdropapp/react-native-wkwebview/issues"
   },
   "dependencies": {
     "fbjs": "^0.8.3"
@@ -48,7 +48,7 @@
   "description": "React Native WKWebView for iOS",
   "devDependencies": {},
   "gitHead": "5c1809c67ca87e531727b51f751db0e71dfebf9b",
-  "homepage": "https://github.com/CRAlpha/react-native-wkwebview",
+  "homepage": "https://github.com/inkdropapp/react-native-wkwebview",
   "keywords": [
     "react",
     "native",
@@ -70,7 +70,7 @@
   "readmeFilename": "README.md",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/CRAlpha/react-native-wkwebview.git"
+    "url": "git+https://github.com/inkdropapp/react-native-wkwebview.git"
   },
   "scripts": {
     "lint": "eslint --ext .js --ext .jsx .",
