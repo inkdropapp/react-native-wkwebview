@@ -1,3 +1,5 @@
+[Difference between original](https://github.com/CRAlpha/react-native-wkwebview/compare/master...inkdropapp:master)
+
 ## WKWebView Component for React Native
 
 [![npm version](https://badge.fury.io/js/react-native-wkwebview-reborn.svg)](https://badge.fury.io/js/react-native-wkwebview-reborn)
